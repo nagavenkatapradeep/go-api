@@ -1,0 +1,12 @@
+[Unit]
+Description=DEV Go API
+After=network.target
+
+[Service]
+ExecStart=/opt/app/dev/start.sh
+WorkingDirectory=/opt/app/dev/
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
