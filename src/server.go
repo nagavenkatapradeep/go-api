@@ -4,6 +4,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -17,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -28,7 +30,6 @@ import (
 var counter int
 var port = 8081
 var mutex = &sync.Mutex{}
-var Version string
 
 const tout int = 10
 
@@ -182,6 +183,56 @@ func readyz(w http.ResponseWriter, r *http.Request, isReady *atomic.Value) {
 	}
 }
 
+// Album type contains album details.
+type Album struct {
+	ID     int    `json:"id"`
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+	Year   int    `json:"price"`
+}
+
+type dbDetails struct {
+	dbHost string
+	dbName string
+	dbPwd  string
+	dbUser string
+}
+
+// listAlbums: Query MySQL Db and list all album records
+func listAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
+	switch r.Method {
+	case http.MethodGet:
+
+		if d.dbHost == "" || d.dbName == "" || d.dbPwd == "" || d.dbUser == "" {
+			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+		}
+		dbURL := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", d.dbUser, d.dbPwd, d.dbHost, d.dbName)
+		db, err := sql.Open("mysql", dbURL)
+		if err != nil {
+			fmt.Println(err)
+			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+		}
+		defer db.Close()
+
+		results, err := db.Query("select * from albums")
+		if err != nil {
+			fmt.Println(err)
+			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+		}
+		for results.Next() {
+			var album Album
+			err = results.Scan(&album.ID, &album.Title, &album.Artist, &album.Year)
+			if err != nil {
+				fmt.Println(err)
+				http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+			}
+			fmt.Println(album)
+		}
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // SetupCloseHandler Interupt handler
 func SetupCloseHandler() {
 	c := make(chan os.Signal, 2)
@@ -192,6 +243,24 @@ func SetupCloseHandler() {
 		// Do something on exit, DeleteFiles() etc.
 		os.Exit(0)
 	}()
+}
+
+func panicRecovery(h func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				// buf := make([]byte, 2048)
+				// n := runtime.Stack(buf, false)
+				// buf = buf[:n]
+
+				// fmt.Printf("recovering from err %v\n %s", err, buf)
+				// w.Write([]byte(`{"error":"our server got panic"}`))
+				http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+			}
+		}()
+
+		h(w, r)
+	}
 }
 
 func main() {
@@ -212,6 +281,47 @@ func main() {
 
 	// UUID
 	http.HandleFunc("/printJSONReq", printJSONReq)
+
+	// List Albums
+	// Change the dbHost via env var
+	dbHost := os.Getenv("DB_HOST")
+	dbHflag := flag.String("db-host", "", "database host")
+	flag.Parse()
+	if *dbHflag != "" {
+		dbHost = *dbHflag
+	}
+
+	dbUser := os.Getenv("DB_USER")
+	dbUflag := flag.String("db-user", "", "database user")
+	flag.Parse()
+	if *dbUflag != "" {
+		dbUser = *dbUflag
+	}
+
+	dbPwd := os.Getenv("DB_PASSWORD")
+	dbPflag := flag.String("db-password", "", "database password")
+	flag.Parse()
+	if *dbPflag != "" {
+		dbPwd = *dbPflag
+	}
+
+	dbName := os.Getenv("DB_NAME")
+	dbNflag := flag.String("db-name", "", "database name")
+	flag.Parse()
+	if *dbNflag != "" {
+		dbPwd = *dbNflag
+	}
+
+	d := dbDetails{
+		dbHost: dbHost,
+		dbName: dbName,
+		dbPwd:  dbPwd,
+		dbUser: dbUser,
+	}
+
+	http.HandleFunc("/getAlbums", panicRecovery(func(w http.ResponseWriter, r *http.Request) {
+		listAlbums(w, r, d)
+	}))
 
 	// Rediness probe (simulate X seconds load time)
 	isReady := &atomic.Value{}
