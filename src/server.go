@@ -245,6 +245,7 @@ func SetupCloseHandler() {
 	}()
 }
 
+// TBD: Still having issues.
 func panicRecovery(h func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
