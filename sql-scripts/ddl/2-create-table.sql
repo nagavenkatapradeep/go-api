@@ -5,4 +5,6 @@ CREATE TABLE `albums` (
   `Title` varchar(100) DEFAULT NULL,
   `Artist` varchar(100) DEFAULT NULL,
   `Year` year DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `go-api-dev`.albums ADD CONSTRAINT id PRIMARY KEY (ID);

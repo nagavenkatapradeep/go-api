@@ -5,6 +5,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -138,7 +139,7 @@ func uuid(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json;")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		id := guuid.New()
-		log.Info().Msgf("github.com/google/uuid:         %s\n", id.String())
+		log.Info().Msgf("github.com/google/uuid: %s\n", id.String())
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, id)
 	default:
@@ -198,6 +199,44 @@ type dbDetails struct {
 	dbUser string
 }
 
+func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
+	switch r.Method {
+	case http.MethodPost:
+
+		if d.dbHost == "" || d.dbName == "" || d.dbPwd == "" || d.dbUser == "" {
+			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+		}
+		dbURL := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", d.dbUser, d.dbPwd, d.dbHost, d.dbName)
+		db, err := sql.Open("mysql", dbURL)
+		if err != nil {
+			fmt.Println(err)
+			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+		}
+		defer db.Close()
+		var a Album
+		dec := json.NewDecoder(r.Body)
+
+		if err := dec.Decode(&a); err != nil {
+			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+		}
+		queryString := `insert into albums (id,Title ,Artist ,` + "`Year`" + `) values (%d,"%s","%s",%d)`
+		query := fmt.Sprintf(queryString, a.ID, a.Title, a.Artist, a.Year)
+		// fmt.Println(query)
+		results, err := db.Query(query)
+		defer results.Close()
+		if err != nil {
+			fmt.Println(err)
+			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Album inserted successfully")
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // listAlbums: Query MySQL Db and list all album records
 func listAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 	switch r.Method {
@@ -219,6 +258,7 @@ func listAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 			fmt.Println(err)
 			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
 		}
+		var albums []Album
 		for results.Next() {
 			var album Album
 			err = results.Scan(&album.ID, &album.Title, &album.Artist, &album.Year)
@@ -226,7 +266,15 @@ func listAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 				fmt.Println(err)
 				http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
 			}
-			fmt.Println(album)
+			// fmt.Println(album)
+			albums = append(albums, album)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "    ")
+		err = enc.Encode(albums)
+		if err != nil {
+			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
 		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -322,6 +370,10 @@ func main() {
 
 	http.HandleFunc("/getAlbums", panicRecovery(func(w http.ResponseWriter, r *http.Request) {
 		listAlbums(w, r, d)
+	}))
+
+	http.HandleFunc("/addAlbum", panicRecovery(func(w http.ResponseWriter, r *http.Request) {
+		addAlbum(w, r, d)
 	}))
 
 	// Rediness probe (simulate X seconds load time)
