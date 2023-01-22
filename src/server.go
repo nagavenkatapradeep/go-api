@@ -407,32 +407,31 @@ func main() {
 	// UUID
 	http.HandleFunc("/printJSONReq", printJSONReq)
 
-	// List Albums
+	// define all flags
+	dbHflag := flag.String("db-host", "", "database host")
+	dbUflag := flag.String("db-user", "", "database user")
+	dbPflag := flag.String("db-password", "", "database password")
+	dbNflag := flag.String("db-name", "", "database name")
+	pflag := flag.String("port", "", "service port")
+	flag.Parse()
+
 	// Change the dbHost via env var
 	dbHost := os.Getenv("DB_HOST")
-	dbHflag := flag.String("db-host", "", "database host")
-	flag.Parse()
 	if *dbHflag != "" {
 		dbHost = *dbHflag
 	}
 
 	dbUser := os.Getenv("DB_USER")
-	dbUflag := flag.String("db-user", "", "database user")
-	flag.Parse()
 	if *dbUflag != "" {
 		dbUser = *dbUflag
 	}
 
 	dbPwd := os.Getenv("DB_PASSWORD")
-	dbPflag := flag.String("db-password", "", "database password")
-	flag.Parse()
 	if *dbPflag != "" {
 		dbPwd = *dbPflag
 	}
 
 	dbName := os.Getenv("DB_NAME")
-	dbNflag := flag.String("db-name", "", "database name")
-	flag.Parse()
 	if *dbNflag != "" {
 		dbPwd = *dbNflag
 	}
@@ -478,8 +477,6 @@ func main() {
 		port = eport
 	}
 	// Change the port via command line flag
-	pflag := flag.String("port", "", "service port")
-	flag.Parse()
 	if *pflag != "" {
 		cport, error := strconv.Atoi(*pflag)
 		if error != nil {
