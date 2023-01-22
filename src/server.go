@@ -369,25 +369,6 @@ func SetupCloseHandler() {
 	}()
 }
 
-// TBD: Still having issues.
-// func panicRecovery(h func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		defer func() {
-// 			if err := recover(); err != nil {
-// 				// buf := make([]byte, 2048)
-// 				// n := runtime.Stack(buf, false)
-// 				// buf = buf[:n]
-
-// 				// fmt.Printf("recovering from err %v\n %s", err, buf)
-// 				// w.Write([]byte(`{"error":"our server got panic"}`))
-// 				http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
-// 			}
-// 		}()
-
-// 		h(w, r)
-// 	}
-// }
-
 func main() {
 	setup()
 	SetupCloseHandler()
