@@ -230,12 +230,12 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		queryString := `insert into albums (id,Title ,Artist ,` + "`Year`" + `) values (%d,"%s","%s",%d)`
 		query := fmt.Sprintf(queryString, a.ID, a.Title, a.Artist, a.Year)
 		results, err := db.Query(query)
-		defer results.Close()
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
 			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
 			return
 		}
+		defer results.Close()
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Album inserted successfully")
 
