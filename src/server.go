@@ -235,6 +235,7 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
 			return
 		}
+		// close results after checking error coz error scenario might return null results
 		defer results.Close()
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Album inserted successfully")

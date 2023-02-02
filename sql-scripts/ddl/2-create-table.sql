@@ -7,4 +7,4 @@ CREATE TABLE `albums` (
   `Year` year DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-ALTER TABLE `go-api-dev`.albums ADD CONSTRAINT id PRIMARY KEY (ID);
+ALTER TABLE `go-api-qa`.albums ADD CONSTRAINT id PRIMARY KEY (ID);
