@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -189,7 +190,7 @@ type Album struct {
 	ID     int    `json:"id"`
 	Title  string `json:"title"`
 	Artist string `json:"artist"`
-	Year   int    `json:"price"`
+	Year   int    `json:"year"`
 }
 
 func (a Album) String() string {
@@ -215,7 +216,10 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		db, err := sql.Open("mysql", dbURL)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+			http.Error(w,
+				// fmt.Sprintf("Error while inserting album - %s", err.Error()),
+				fmt.Sprintf("Error while inserting album - %s", err.Error()),
+				http.StatusInternalServerError)
 			return
 		}
 		defer db.Close()
@@ -224,7 +228,7 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 
 		if err := dec.Decode(&a); err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while inserting album - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		queryString := `insert into albums (id,Title ,Artist ,` + "`Year`" + `) values (%d,"%s","%s",%d)`
@@ -232,7 +236,7 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		results, err := db.Query(query)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while inserting album - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		// close results after checking error coz error scenario might return null results
@@ -248,7 +252,7 @@ func addAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 func valideDBDetails(d dbDetails, w http.ResponseWriter) bool {
 	if d.dbHost == "" || d.dbName == "" || d.dbPwd == "" || d.dbUser == "" {
 		log.Logger.Error().Msg("DB details are missing")
-		http.Error(w, "Error while inserting album", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error while inserting album - %s", "DB Details are missing"), http.StatusInternalServerError)
 		return false
 	}
 	return true
@@ -272,7 +276,7 @@ func getAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		db, err := sql.Open("mysql", dbURL)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving album.", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving album - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		defer db.Close()
@@ -281,7 +285,7 @@ func getAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		results, err := db.Query(query)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving album.", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving album - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		var album Album
@@ -290,7 +294,7 @@ func getAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 			err = results.Scan(&album.ID, &album.Title, &album.Artist, &album.Year)
 			if err != nil {
 				log.Logger.Error().Msg(err.Error())
-				http.Error(w, "Error while retrieving album.", http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Error while retrieving album - %s", err.Error()), http.StatusInternalServerError)
 				return
 			}
 			log.Info().Msg("Album is :" + album.String())
@@ -302,7 +306,65 @@ func getAlbum(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		err = enc.Encode(album)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving album.", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving album - %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// getAlbumByName: Retrieve a single album by name. `name` is used as a regex pattern.
+func getAlbumByName(w http.ResponseWriter, r *http.Request, d dbDetails) {
+	switch r.Method {
+	case http.MethodGet:
+
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			log.Logger.Error().Msg("Album Name parameter is not provided")
+			http.Error(w, "Album Name parameter is missing", http.StatusBadRequest)
+			return
+		}
+		if !valideDBDetails(d, w) {
+			return
+		}
+		dbURL := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", d.dbUser, d.dbPwd, d.dbHost, d.dbName)
+		db, err := sql.Open("mysql", dbURL)
+		if err != nil {
+			log.Logger.Error().Msg(err.Error())
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+		name = strings.ToLower(name)
+		name = strings.TrimSpace(name)
+		query := fmt.Sprintf("select * from albums where name like '%%%s'", name)
+
+		results, err := db.Query(query)
+		if err != nil {
+			log.Logger.Error().Msg(err.Error())
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		var album Album
+
+		for results.Next() {
+			err = results.Scan(&album.ID, &album.Title, &album.Artist, &album.Year)
+			if err != nil {
+				log.Logger.Error().Msg(err.Error())
+				http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
+				return
+			}
+			log.Info().Msg("Album is :" + album.String())
+
+		}
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "    ")
+		err = enc.Encode(album)
+		if err != nil {
+			log.Logger.Error().Msg(err.Error())
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 	default:
@@ -322,7 +384,7 @@ func getAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		db, err := sql.Open("mysql", dbURL)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		defer db.Close()
@@ -330,7 +392,7 @@ func getAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		results, err := db.Query("select * from albums")
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 		var albums []Album
@@ -339,7 +401,7 @@ func getAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 			err = results.Scan(&album.ID, &album.Title, &album.Artist, &album.Year)
 			if err != nil {
 				log.Logger.Error().Msg(err.Error())
-				http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
 				return
 			}
 			albums = append(albums, album)
@@ -350,7 +412,7 @@ func getAlbums(w http.ResponseWriter, r *http.Request, d dbDetails) {
 		err = enc.Encode(albums)
 		if err != nil {
 			log.Logger.Error().Msg(err.Error())
-			http.Error(w, "Error while retrieving albums", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error while retrieving albums - %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 	default:
@@ -436,6 +498,11 @@ func main() {
 	http.HandleFunc("/getAlbum", func(w http.ResponseWriter, r *http.Request) {
 		getAlbum(w, r, d)
 	})
+
+	http.HandleFunc("/getAlbumByName", func(w http.ResponseWriter, r *http.Request) {
+		getAlbumByName(w, r, d)
+	})
+
 	// Rediness probe (simulate X seconds load time)
 	isReady := &atomic.Value{}
 	isReady.Store(false)
